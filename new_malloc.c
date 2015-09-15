@@ -110,6 +110,24 @@ new_malloc(size_t size)
     return ptr;
 }
 
+void
+test_new_malloc()
+{
+    void    *ptr = NULL;
+    int     size;
+
+    while(1)
+    {
+	printf("Size of memory to allocate  : ");
+	scanf("%d", &size);
+	ptr = new_malloc(size);
+	printf("Allocated pointer   :   %x\n", ptr);
+	if((unsigned int)ptr%32 == 0)
+	    printf("32-byte Alligned\n");
+	else
+	    printf("***error [%x] is not 32-byte alligned\n", ptr);
+    }
+}
 
 int
 main()
@@ -123,6 +141,7 @@ main()
     ptr = new_malloc(size);
     printf("Allocated pointer	:   %x\n", ptr);
 
+    test_new_malloc();
     return 0;
 }
 
