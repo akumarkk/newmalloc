@@ -67,12 +67,17 @@ init_allocator(memory_header_t *prev, uint16_t size)
 	head->next = tmp;
 	tmp->is_free = true;
 
-	if((size_t)tmp % 32)
+	if(((size_t)tmp + sizeof(memory_header_t) - 1) % 32)
 	    tmp->num_padding = 32 - ((size_t)tmp % 32);
 	else
 	    tmp->num_padding = 0;
 	tmp->next = NULL;
-	tmp->size = available_mem - sizeof(memory_header_t) - tmp->num_padding;
+	tmp->size = available_mem - size - sizeof(memory_header_t) - tmp->num_padding;
+	tmp->start = (char *)tmp + sizeof(memory_header_t) + tmp->num_padding;
+	debug("Next block padding	=   %d", tmp->num_padding);
+	debug("Next block size		=   %d", tmp->size);
+	debug("Next block starts at	=   %p", tmp->start);
+	
     }
     else
 	head->next = NULL;
@@ -102,8 +107,10 @@ allocate_mem(size_t size)
 	debug("Looking for free memory block [%p]", head);
 	if(head->is_free == true)
 	{
+	    debug("Found a new free block   [%p]", head);
 	    if(head->size > size)
 	    {
+		debug("Block has more size than required - [%p]", head);
 		/* We have more than we need. Divide it into two blocks */
 		int extra_avail_mem = head->size - size;
 		tmp = head;
