@@ -113,13 +113,14 @@ allocate_mem(size_t size)
 		debug("Block has more size than required - [%p]", head);
 		/* We have more than we need. Divide it into two blocks */
 		int extra_avail_mem = head->size - size;
+		head->is_free = false;
 		tmp = head;
 		ret_ptr = tmp + sizeof(memory_header_t) + head->num_padding;
 		head->next = tmp + sizeof(memory_header_t) + head->num_padding + size;
 		head = head->next;
 		
-		if((size_t)head % 32)
-		    head->num_padding = 32 - ((size_t)head % 32);
+		if(((size_t)head + sizeof(memory_header_t) ) % 32)
+		    head->num_padding = 32 - (((size_t)head + sizeof(memory_header_t) ) % 32);
 		else
 		    head->num_padding =0;
 		
