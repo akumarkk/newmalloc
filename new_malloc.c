@@ -3,8 +3,15 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#define DEBUG 1
 
 #define MAX_ALLOCATOR_MEMORY (64 * 1024)
+
+#define debug(fmt,...)\
+    do{\
+	if(DEBUG)\
+	    fprintf(stdout, "%s(%d) : " fmt "\n", __FUNCTION__, __LINE__, __VA_ARGS__); \
+    }while(0)
 
 typedef struct mem_header_
 {
@@ -14,18 +21,19 @@ typedef struct mem_header_
      * num_padding : Indicates the number of bytes padded to make it alligned
      */
     uint16_t	    num_padding;
-    struct	    mem_header *next;
+    struct	    mem_header_ *next;
     void	    *start;
-}mem_header_t;
+}memory_header_t;
 
-mem_header_t	*allocator;
+void *allocator;
 
 void *
-init_allocator(mem_header_t *prev)
+init_allocator(memory_header_t *prev, uint16_t size)
 {
-    mem_header_t    *head;
-    void	    *block;
-    int		    rem;
+    memory_header_t     *head, *tmp;
+    void		*block;
+    int			rem;
+    int			available_mem = 0;		
 
     block = malloc(sizeof(MAX_ALLOCATOR_MEMORY));
     if(block == NULL)
@@ -33,11 +41,42 @@ init_allocator(mem_header_t *prev)
 	fprintf(stderr, "Allocation failed!!!\n");
 	exit(-1);
     }
+
+    debug("Requested size   =  %u", size);
+    debug("Allocated block  =  %p", block);
+    debug("Sizeof header    =  %lu", sizeof(memory_header_t));
+
     head = block;
-    head->is_free = true;
-    rem = (unsigned int)head % 32;
-    head->num_padding = 32 - rem;
-    head->size = MAX_ALLOCATOR_MEMORY - head->num_padding - sizeof(mem_header_t);
+    head->is_free = false;
+
+    rem = (size_t)head % 32;
+    if((size_t)head % 32)
+	head->num_padding = 32 - rem; 
+    
+    available_mem = MAX_ALLOCATOR_MEMORY - head->num_padding - sizeof(memory_header_t);
+
+    debug("Number of bytes paddding	=   %d", head->num_padding);
+    debug("Size allocated		=   %d", head->size);
+
+    if(available_mem > size)
+    {
+	/* Lets break it into two pieces */
+	tmp = (memory_header_t *)((char *)head + head->num_padding + sizeof(memory_header_t) + size);
+	debug("Next block		=   %p", tmp);
+
+	head->next = tmp;
+	tmp->is_free = true;
+
+	if((size_t)tmp % 32)
+	    tmp->num_padding = 32 - ((size_t)tmp % 32);
+	else
+	    tmp->num_padding = 0;
+	tmp->next = NULL;
+	tmp->size = available_mem - sizeof(memory_header_t) - tmp->num_padding;
+    }
+    else
+	head->next = NULL;
+	
 
     if(prev == NULL)
 	allocator = block;
@@ -50,14 +89,17 @@ init_allocator(mem_header_t *prev)
 void *
 allocate_mem(size_t size)
 {
+    void	    *new_block=NULL;
     int		    rem;
     void	    *tmp=NULL;
-    mem_header_t    *head, *new_block;
+    memory_header_t    *head;
     void	    *ret_ptr = NULL;
+    int		    num_padding=0;
     
-    head = (mem_header_t *)allocator;
+    head = (memory_header_t *)allocator;
     while(head != NULL)
     {
+	debug("Looking for free memory block [%p]", head);
 	if(head->is_free == true)
 	{
 	    if(head->size > size)
@@ -65,26 +107,31 @@ allocate_mem(size_t size)
 		/* We have more than we need. Divide it into two blocks */
 		int extra_avail_mem = head->size - size;
 		tmp = head;
-		ret_ptr = tmp + sizeof(mem_header_t) + head->num_padding;
-		head->next = tmp + sizeof(mem_header_t) + head->num_padding + size;
+		ret_ptr = tmp + sizeof(memory_header_t) + head->num_padding;
+		head->next = tmp + sizeof(memory_header_t) + head->num_padding + size;
 		head = head->next;
 		
-		rem = (unsigned int)head % 32;
-		head->size = extra_avail_mem;
-		head->num_padding = 32 - rem;
+		if((size_t)head % 32)
+		    head->num_padding = 32 - ((size_t)head % 32);
+		else
+		    head->num_padding =0;
+		
 		/* Here size will be negative if this block does not have sufficint space 
 		 * to hold header and padding bytes
 		 */
-		extra_avail_mem = extra_avail_mem - head->num_padding - sizeof(mem_header_t);
+		extra_avail_mem = extra_avail_mem - head->num_padding - sizeof(memory_header_t);
 		if(extra_avail_mem < 0)
 		    head->size = 0;
+		else
+		    head->size = extra_avail_mem;
+		head->next = NULL;
 		
 		return ret_ptr;
 	    }
 	    else if(head->size == size)
 	    {
 		tmp = head;
-		ret_ptr = tmp + sizeof(mem_header_t) + head->num_padding;
+		ret_ptr = tmp + sizeof(memory_header_t) + head->num_padding;
 		return ret_ptr;
 	    }
 	}
@@ -92,8 +139,12 @@ allocate_mem(size_t size)
 	head = head->next;
     }
 
-    new_block = init_allocator(NULL);
-    new_block =  new_block + sizeof(mem_header_t) + new_block->num_padding;
+    new_block = init_allocator(NULL, size);
+    debug("Allocated pointer		    =	%p", new_block);
+    num_padding = ((memory_header_t *)new_block)->num_padding;
+
+    new_block =  (char *)new_block + sizeof(memory_header_t) + num_padding;
+    debug("Newly allocated return pointer   =	%p\n", new_block);
 
     return new_block;
 }
@@ -121,11 +172,11 @@ test_new_malloc()
 	printf("Size of memory to allocate  : ");
 	scanf("%d", &size);
 	ptr = new_malloc(size);
-	printf("Allocated pointer   :   %x\n", ptr);
+	printf("Allocated pointer   :   %p\n", ptr);
 	if((unsigned int)ptr%32 == 0)
 	    printf("32-byte Alligned\n");
 	else
-	    printf("***error [%x] is not 32-byte alligned\n", ptr);
+	    printf("***error [%p] is not 32-byte alligned\n", ptr);
     }
 }
 
@@ -139,7 +190,7 @@ main()
     scanf("%d", &size);
 
     ptr = new_malloc(size);
-    printf("Allocated pointer	:   %x\n", ptr);
+    printf("Allocated pointer	:   %p\n", ptr);
 
     test_new_malloc();
     return 0;
