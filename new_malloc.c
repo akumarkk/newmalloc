@@ -67,8 +67,8 @@ init_allocator(memory_header_t *prev, uint16_t size)
 	head->next = tmp;
 	tmp->is_free = true;
 
-	if(((size_t)tmp + sizeof(memory_header_t) - 1) % 32)
-	    tmp->num_padding = 32 - ((size_t)tmp % 32);
+	if(((size_t)tmp + sizeof(memory_header_t) ) % 32)
+	    tmp->num_padding = 32 - (((size_t)tmp + sizeof(memory_header_t) )% 32);
 	else
 	    tmp->num_padding = 0;
 	tmp->next = NULL;
