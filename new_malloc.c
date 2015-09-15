@@ -118,7 +118,8 @@ allocate_mem(size_t size)
 		ret_ptr = tmp + sizeof(memory_header_t) + head->num_padding;
 		head->next = tmp + sizeof(memory_header_t) + head->num_padding + size;
 		head = head->next;
-		
+	
+		head->is_free = true;	
 		if(((size_t)head + sizeof(memory_header_t) ) % 32)
 		    head->num_padding = 32 - (((size_t)head + sizeof(memory_header_t) ) % 32);
 		else
