@@ -150,6 +150,17 @@ allocate_mem(size_t size)
 }
 
 
+void
+new_free(void *ptr)
+{
+    memory_header_t	*head;
+    if(ptr == NULL)
+	return;
+
+    head = ptr;
+    head->is_free = true;
+}
+
 void *
 new_malloc(size_t size)
 {
